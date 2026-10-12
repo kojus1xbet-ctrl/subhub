@@ -1,0 +1,56 @@
+[
+  {
+    "id": "acc-netflix-kojs",
+    "productId": "prod-netflix-4k",
+    "serviceName": "Netflix Premium Ultra HD (4K)",
+    "masterEmail": "kojs1xbet@gmail.com",
+    "masterPassword": "SubHub#Netflix2026!",
+    "notes": "Compte officiel configuré avec profils verrouillés par PIN personnel.",
+    "updatedAt": "2026-10-07T07:12:44.844Z",
+    "slots": [
+      {
+        "id": "slot-lordflix",
+        "profileName": "LORD FLIX",
+        "pinCode": "1602",
+        "isReservedAdmin": true,
+        "status": "assigned",
+        "assignedToEmail": "admin@subhub.local (Propriétaire / Admin)",
+        "avatarStyle": "lordflix"
+      },
+      {
+        "id": "slot-dub",
+        "profileName": "DUB",
+        "pinCode": "0297",
+        "isReservedAdmin": false,
+        "status": "assigned",
+        "avatarStyle": "dub",
+        "assignedToEmail": "client@subhub.local",
+        "assignedAt": "2026-10-07T07:12:44.844Z"
+      },
+      {
+        "id": "slot-pro5",
+        "profileName": "PRO 5",
+        "pinCode": "0213",
+        "isReservedAdmin": false,
+        "status": "available",
+        "avatarStyle": "pro5"
+      },
+      {
+        "id": "slot-modtsar",
+        "profileName": "MOD TSAR 0309",
+        "pinCode": "1407",
+        "isReservedAdmin": false,
+        "status": "available",
+        "avatarStyle": "squid"
+      },
+      {
+        "id": "slot-gaston",
+        "profileName": "GASTON SEP 01",
+        "pinCode": "9870",
+        "isReservedAdmin": false,
+        "status": "available",
+        "avatarStyle": "gaston"
+      }
+    ]
+  }
+]
