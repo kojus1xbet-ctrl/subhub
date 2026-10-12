@@ -67,53 +67,75 @@ export function ClientAuthModal({
 
   if (!isOpen && !inline) return null;
 
-  // 1. Connexion avec Google OAuth 2.0 Officiel (ou étape d'identification Gmail sécurisée)
+  // 1. Connexion avec Google OAuth 2.0 Officiel
+  const triggerGooglePopup = (clientId: string) => {
+    setLoading(true);
+    try {
+      const tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: 'openid email profile',
+        callback: async (tokenResponse: any) => {
+          if (tokenResponse.error) {
+            setLoading(false);
+            setError('Authentification Google annulée ou refusée.');
+            return;
+          }
+          try {
+            const res = await fetch('/api/auth/client', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                action: 'google_oauth',
+                accessToken: tokenResponse.access_token
+              })
+            });
+            const data = await res.json();
+            if (!data.success) {
+              throw new Error(data.error || 'Échec de validation Google');
+            }
+
+            completeLogin(data.user);
+          } catch (err: any) {
+            setError(err?.message || 'Erreur lors de la validation Google');
+          } finally {
+            setLoading(false);
+          }
+        }
+      });
+
+      tokenClient.requestAccessToken({ prompt: 'select_account' });
+    } catch (e: any) {
+      setLoading(false);
+      setStep('google_form');
+    }
+  };
+
   const handleGoogleSignInClick = () => {
     setError(null);
     const clientId = getGoogleClientId();
 
-    if (clientId && gsiReady && window.google?.accounts?.oauth2) {
+    if (clientId && window.google?.accounts?.oauth2) {
+      triggerGooglePopup(clientId);
+    } else if (clientId) {
       setLoading(true);
-      try {
-        const tokenClient = window.google.accounts.oauth2.initTokenClient({
-          client_id: clientId,
-          scope: 'openid email profile',
-          callback: async (tokenResponse: any) => {
-            if (tokenResponse.error) {
-              setLoading(false);
-              setError('Authentification Google annulée ou refusée.');
-              return;
-            }
-            try {
-              const res = await fetch('/api/auth/client', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  action: 'google_oauth',
-                  accessToken: tokenResponse.access_token
-                })
-              });
-              const data = await res.json();
-              if (!data.success) {
-                throw new Error(data.error || 'Échec de validation Google');
-              }
-
-              completeLogin(data.user);
-            } catch (err: any) {
-              setError(err?.message || 'Erreur lors de la validation Google');
-            } finally {
-              setLoading(false);
-            }
-          }
-        });
-
-        tokenClient.requestAccessToken({ prompt: 'select_account' });
-      } catch (e: any) {
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.async = true;
+      script.onload = () => {
+        setGsiReady(true);
+        if (window.google?.accounts?.oauth2) {
+          triggerGooglePopup(clientId);
+        } else {
+          setLoading(false);
+          setStep('google_form');
+        }
+      };
+      script.onerror = () => {
         setLoading(false);
         setStep('google_form');
-      }
+      };
+      document.body.appendChild(script);
     } else {
-      // Si aucun Client ID Google Cloud OAuth n'est encore renseigné, ouvrir l'identification Gmail personnelle (jamais de faux compte automatique)
       setStep('google_form');
     }
   };

@@ -14,15 +14,17 @@ export interface ClientUser {
 
 export const CLIENT_USER_STORAGE_KEY = 'subhub_client_user';
 export const GOOGLE_CLIENT_ID_STORAGE_KEY = 'subhub_google_client_id';
+export const DEFAULT_GOOGLE_CLIENT_ID = '488265776459-kp7dig9ao1ev9gmsei1lhndadatrrt49.apps.googleusercontent.com';
 
 export function getGoogleClientId(): string {
   if (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
     return process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
   }
   if (typeof window !== 'undefined') {
-    return localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY) || '';
+    const saved = localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY);
+    if (saved) return saved;
   }
-  return '';
+  return DEFAULT_GOOGLE_CLIENT_ID;
 }
 
 export function getStoredClientUser(): ClientUser | null {
