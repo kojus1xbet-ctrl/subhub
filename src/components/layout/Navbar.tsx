@@ -82,7 +82,7 @@ export function Navbar({
             >
               <LayoutDashboard className="h-4 w-4 text-cyan-400" />
               Mon Espace Client
-              {activeSubsCount > 0 && (
+              {isAuthenticated && activeSubsCount > 0 && (
                 <span className="ml-1 flex h-5 w-5 items-center justify-center rounded-full bg-indigo-500 text-[11px] font-bold text-white">
                   {activeSubsCount}
                 </span>
@@ -94,8 +94,8 @@ export function Navbar({
         {/* Right side: Actions, Profil & Auth */}
         <div className="flex items-center gap-3">
           
-          {/* Solde Portefeuille : VISIBLE UNIQUEMENT SUR LE DASHBOARD (ou si client authentifié accédant à son dashboard) */}
-          {isDashboard && (
+          {/* Solde Portefeuille : VISIBLE UNIQUEMENT SUR LE DASHBOARD ET SI LE CLIENT EST AUTHENTIFIÉ */}
+          {isDashboard && isAuthenticated && (
             <button
               onClick={onOpenWallet}
               className="flex items-center gap-2.5 rounded-xl border border-slate-800 bg-slate-900/90 px-3.5 py-1.5 text-left transition-all hover:border-indigo-500/50 hover:bg-slate-850 hover:shadow-md animate-fadeIn"
@@ -121,9 +121,17 @@ export function Navbar({
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/90 px-3 py-1.5 text-xs text-white hover:border-slate-700 transition-colors"
               >
-                <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-600/30 text-indigo-300 font-bold uppercase text-[10px] border border-indigo-500/30">
-                  {user.name ? user.name[0] : 'U'}
-                </div>
+                {user.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    className="h-6 w-6 rounded-lg object-cover border border-indigo-500/30"
+                  />
+                ) : (
+                  <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-indigo-600/30 text-indigo-300 font-bold uppercase text-[10px] border border-indigo-500/30">
+                    {user.name ? user.name[0] : 'U'}
+                  </div>
+                )}
                 <span className="font-semibold max-w-[120px] truncate hidden sm:inline">
                   {user.name || user.email}
                 </span>

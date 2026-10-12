@@ -6,18 +6,35 @@ export interface ClientUser {
   id: string;
   email: string;
   name: string;
-  avatar?: string;
+  avatar?: string | null;
   provider: 'google' | 'email';
+  sessionToken?: string;
   createdAt: string;
 }
 
 export const CLIENT_USER_STORAGE_KEY = 'subhub_client_user';
+export const GOOGLE_CLIENT_ID_STORAGE_KEY = 'subhub_google_client_id';
+
+export function getGoogleClientId(): string {
+  if (process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+    return process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+  }
+  if (typeof window !== 'undefined') {
+    return localStorage.getItem(GOOGLE_CLIENT_ID_STORAGE_KEY) || '';
+  }
+  return '';
+}
 
 export function getStoredClientUser(): ClientUser | null {
   if (typeof window === 'undefined') return null;
   try {
     const data = localStorage.getItem(CLIENT_USER_STORAGE_KEY);
-    return data ? JSON.parse(data) : null;
+    if (!data) return null;
+    const parsed = JSON.parse(data) as ClientUser;
+    if (!parsed || !parsed.email || !parsed.sessionToken) {
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -48,9 +65,28 @@ export function useClientAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const syncUser = () => {
-      setUser(getStoredClientUser());
+    const syncUser = async () => {
+      const stored = getStoredClientUser();
+      if (!stored) {
+        setUser(null);
+        setLoading(false);
+        return;
+      }
+
+      setUser(stored);
       setLoading(false);
+
+      // Vérification cryptographique du jeton de session côté serveur
+      try {
+        const res = await fetch(`/api/auth/client?verify_token=${encodeURIComponent(stored.sessionToken || '')}&email=${encodeURIComponent(stored.email)}`);
+        const data = await res.json();
+        if (!data.valid) {
+          removeStoredClientUser();
+          setUser(null);
+        }
+      } catch {
+        // En cas de coupure réseau passagère, conserver la session locale
+      }
     };
 
     syncUser();
@@ -76,7 +112,7 @@ export function useClientAuth() {
   return { 
     user, 
     loading, 
-    isAuthenticated: !!user, 
+    isAuthenticated: !!user && !!user.sessionToken, 
     login, 
     logout 
   };

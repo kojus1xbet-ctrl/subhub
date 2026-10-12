@@ -34,10 +34,10 @@ import { UserSubscription, WalletTransaction, Product } from '@/lib/types';
 import { formatPrice } from '@/lib/utils';
 
 export default function DashboardPage() {
-  const { user, isAuthenticated, login, logout } = useClientAuth();
-  const [subscriptions, setSubscriptions] = useState<UserSubscription[]>(INITIAL_USER_SUBSCRIPTIONS);
-  const [transactions, setTransactions] = useState<WalletTransaction[]>(INITIAL_TRANSACTIONS);
-  const [walletBalance, setWalletBalance] = useState<number>(42.50);
+  const { user, loading, isAuthenticated, login, logout } = useClientAuth();
+  const [subscriptions, setSubscriptions] = useState<UserSubscription[]>([]);
+  const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [walletBalance, setWalletBalance] = useState<number>(0);
   const [products, setProducts] = useState<Product[]>(INITIAL_PRODUCTS);
 
   // Modals
@@ -135,10 +135,59 @@ export default function DashboardPage() {
   };
 
   const copyReferralLink = () => {
-    navigator.clipboard.writeText('https://subhub.ai/join?ref=CLIENT-PRO-482');
+    navigator.clipboard.writeText('https://subhub-phi.vercel.app/?ref=CLIENT-PRO-482');
     setCopiedReferral(true);
     setTimeout(() => setCopiedReferral(false), 2000);
   };
+
+  // 1. Chargement de la vérification de session
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="h-8 w-8 rounded-full border-2 border-indigo-500/30 border-t-indigo-500 animate-spin" />
+          <p className="text-xs text-slate-400">Vérification de votre session sécurisée...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Verrouillage strict : Si le client n'est pas authentifié, bloquer l'accès au Dashboard
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white">
+        <Navbar
+          walletBalance={0}
+          activeSubsCount={0}
+          onOpenWallet={() => {}}
+          onOpenAuth={() => {}}
+        />
+
+        <main className="flex-1 flex flex-col items-center justify-center px-4 py-12">
+          <div className="mb-6 text-center max-w-md">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-indigo-500/30 bg-indigo-950/40 px-3 py-1 text-[11px] font-bold text-indigo-300 mb-2">
+              <Lock className="h-3.5 w-3.5 text-indigo-400" />
+              Espace Client Protégé
+            </div>
+            <p className="text-xs text-slate-400">
+              Veuillez vous authentifier avec votre compte Google ou votre e-mail personnel pour déverrouiller votre tableau de bord et votre coffre-fort d'identifiants.
+            </p>
+          </div>
+
+          <ClientAuthModal
+            isOpen={true}
+            inline={true}
+            onSuccess={(loggedUser) => {
+              login(loggedUser);
+              setNotification(`Bienvenue dans votre espace sécurisé, ${loggedUser.name || loggedUser.email} !`);
+            }}
+          />
+        </main>
+
+        <Footer />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-indigo-500 selection:text-white">
@@ -158,43 +207,6 @@ export default function DashboardPage() {
           <div className="mb-6 rounded-xl border border-emerald-500/30 bg-emerald-950/40 p-4 text-xs font-bold text-emerald-300 flex items-center gap-2.5 animate-fadeIn">
             <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
             <span>{notification}</span>
-          </div>
-        )}
-
-        {/* Bannière Connexion Client si non connecté */}
-        {!isAuthenticated && (
-          <div className="mb-8 rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-indigo-950/40 via-slate-900 to-indigo-950/40 p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl shadow-indigo-950/30">
-            <div className="flex items-center gap-4">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 shrink-0">
-                <Sparkles className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Connexion Espace Client</h3>
-                <p className="text-xs text-slate-400">
-                  Connectez-vous pour synchroniser vos accès sécurisés, vos codes PIN et votre solde.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
-              <button
-                onClick={() => setIsAuthOpen(true)}
-                className="flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-xs font-bold text-slate-900 shadow hover:bg-slate-100 transition-all hover:scale-[1.02]"
-              >
-                <svg viewBox="0 0 24 24" className="h-4 w-4">
-                  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-                </svg>
-                <span>Continuer avec Google</span>
-              </button>
-              <button
-                onClick={() => setIsAuthOpen(true)}
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-violet-500 transition-all hover:scale-[1.02]"
-              >
-                <span>Code d'accès par e-mail</span>
-              </button>
-            </div>
           </div>
         )}
 

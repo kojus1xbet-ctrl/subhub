@@ -47,8 +47,9 @@ export function ChariowManager() {
     setTimeout(() => setSavedSuccess(false), 2500);
   };
 
-  const netflixConnectUrl = `${publicOrigin || 'https://subhub.ai'}/connect/netflix`;
-  const chatgptConnectUrl = `${publicOrigin || 'https://subhub.ai'}/connect/chatgpt`;
+  const baseDomain = (publicOrigin && !publicOrigin.includes('localhost')) ? publicOrigin : 'https://subhub-phi.vercel.app';
+  const netflixConnectUrl = `${baseDomain}/connect/netflix`;
+  const chatgptConnectUrl = `${baseDomain}/connect/chatgpt`;
 
   const netflixDeliveryMessage = `🎉 Merci pour votre achat ! Votre accès Netflix Premium Ultra HD 4K est actif.
 
