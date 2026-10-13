@@ -52,5 +52,24 @@
         "avatarStyle": "gaston"
       }
     ]
+  },
+  {
+    "id": "acc-capcut-pro-ahmed",
+    "productId": "prod-capcut-pro",
+    "serviceName": "CapCut Pro 2026 (Licence 6 Mois)",
+    "masterEmail": "ahmedwaheedmagdy206@gmail.com",
+    "masterPassword": "Aa01141954698",
+    "notes": "Compte officiel CapCut Pro 6 mois (180j) avec export 4K 60fps et suite IA débloquée.",
+    "updatedAt": "2026-10-13T09:00:00.000Z",
+    "slots": [
+      {
+        "id": "slot-capcut-1",
+        "profileName": "Licence CapCut Pro Dédiée (6 Mois)",
+        "pinCode": "",
+        "isReservedAdmin": false,
+        "status": "available",
+        "avatarStyle": "custom"
+      }
+    ]
   }
 ]

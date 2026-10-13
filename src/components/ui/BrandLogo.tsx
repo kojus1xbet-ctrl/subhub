@@ -235,6 +235,22 @@ export function BrandLogo({
     );
   }
 
+  // 12b. CapCut Pro Officiel (Logo vectoriel stylisé sur fond noir avec reflets cyan/blanc)
+  if (normalizedKey.includes('capcut')) {
+    return (
+      <div 
+        className={`relative flex items-center justify-center rounded-xl bg-black border border-cyan-500/40 p-2 shadow-md shadow-cyan-500/20 shrink-0 ${currentSizeClass} ${className}`}
+        title="CapCut Pro"
+      >
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="h-full w-full">
+          <path d="M19.5 7.5L12 12l7.5 4.5V7.5z" fill="#00E5FF" />
+          <path d="M4.5 7.5L12 12 4.5 16.5V7.5z" fill="#FFFFFF" />
+          <circle cx="12" cy="12" r="2.5" fill="#00E5FF" />
+        </svg>
+      </div>
+    );
+  }
+
   // 13. Extraction Dynamique Pro (Nettoyage de domaine et résolveur multi-source de favicons HD)
   const rawDomain = officialDomain || (logoUrl ? (() => { try { return new URL(logoUrl).hostname; } catch { return null; } })() : null);
   const cleanDomain = rawDomain 

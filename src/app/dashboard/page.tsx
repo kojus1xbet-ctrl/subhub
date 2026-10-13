@@ -62,7 +62,16 @@ export default function DashboardPage() {
       else setWalletBalance(0);
 
       const savedProds = localStorage.getItem('subhub_products');
-      if (savedProds) setProducts(JSON.parse(savedProds));
+      if (savedProds) {
+        const parsed: Product[] = JSON.parse(savedProds);
+        const existingIds = new Set(parsed.map((p) => p.id));
+        const merged = [...parsed, ...INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id))];
+        setProducts(merged);
+        localStorage.setItem('subhub_products', JSON.stringify(merged));
+      } else {
+        setProducts(INITIAL_PRODUCTS);
+        localStorage.setItem('subhub_products', JSON.stringify(INITIAL_PRODUCTS));
+      }
 
       // Vérification Magic Link URL (?auth_token=...&email=...)
       if (typeof window !== 'undefined') {

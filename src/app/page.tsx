@@ -47,15 +47,19 @@ export default function HomePage() {
       const savedProducts = localStorage.getItem('subhub_products');
       if (savedProducts) {
         const parsed: Product[] = JSON.parse(savedProducts);
-        const synced = parsed.map((p) => 
+        const existingIds = new Set(parsed.map((p) => p.id));
+        const merged = [...parsed, ...INITIAL_PRODUCTS.filter((p) => !existingIds.has(p.id))];
+        const synced = merged.map((p) => 
           p.id === 'prod-netflix-4k' ? { ...p, stockCount: availNetflixSlots } : p
         );
         setProducts(synced);
+        localStorage.setItem('subhub_products', JSON.stringify(synced));
       } else {
         const initialSynced = INITIAL_PRODUCTS.map((p) =>
           p.id === 'prod-netflix-4k' ? { ...p, stockCount: availNetflixSlots } : p
         );
         setProducts(initialSynced);
+        localStorage.setItem('subhub_products', JSON.stringify(initialSynced));
       }
 
       const savedSubs = localStorage.getItem('subhub_subs');

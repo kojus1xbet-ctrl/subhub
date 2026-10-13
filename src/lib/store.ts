@@ -315,6 +315,53 @@ export const INITIAL_PRODUCTS: Product[] = [
     iconName: 'Film',
     officialDomain: 'amazon.com',
     isPopular: false
+  },
+  {
+    id: 'prod-capcut-pro',
+    name: 'CapCut Pro 2026 | Licence 6 Mois (180j) | Export 4K 60fps & Outils IA 🎬',
+    slug: 'capcut-pro',
+    category: 'productivity',
+    badge: 'Offre Spéciale 6 Mois 🎬',
+    shortDescription: 'Accès officiel CapCut Pro 6 mois : export 4K 60fps sans filigrane, sous-titres automatiques IA, suppression de fond et effets Pro.',
+    description: 'Bénéficiez de toutes les fonctionnalités avancées de la suite de montage vidéo numéro 1 sur PC, Mac et Mobile (Android/iOS). Exportez vos créations en Ultra HD 4K 60fps sans aucun filigrane, profitez des voix de synthèse IA, de la suppression d\'arrière-plan en 1 clic et des milliers d\'effets et animations Pro exclusifs.',
+    officialPrice: 36000,
+    buyPrice: 2400, // Acheté à 3.85$ (~2 400 FCFA)
+    sellPrice: 5900, // 5 900 FCFA (Marge brute > 145%)
+    paymentLinkChariow: 'https://chariow.com/pay/capcut-pro-5900',
+    sourcePlatform: 'Stock Direct Administrateur',
+    sourceUrl: 'https://capcut.com',
+    accountType: 'private_account',
+    deliveryType: 'instant_auto',
+    duration: '6 mois (180 jours)',
+    durationDays: 180,
+    warrantyDays: 180,
+    rules: {
+      canChangePassword: false,
+      requiresVpn: false,
+      maxDevices: 2,
+      instructions: [
+        'Connectez-vous sur l\'application CapCut (PC, Mac, iOS ou Android) ou sur capcut.com avec l\'adresse e-mail et le mot de passe fournis dans votre coffre-fort.',
+        'Activez la synchronisation Cloud pour retrouver vos projets et modèles sur tous vos appareils.',
+        'Profitez instantanément de l\'ensemble des filtres, transitions, voix IA et exports 4K 60fps débloqués.'
+      ],
+      restrictions: [
+        'Ne modifiez pas l\'adresse email ou le mot de passe du compte pour préserver la garantie active de 180 jours.',
+        'Usage personnel sur vos appareils autorisés.'
+      ]
+    },
+    features: [
+      'Exportation vidéo Ultra HD 4K 60fps sans filigrane',
+      'Sous-titres automatiques IA & traduction multilingue instantanée',
+      'Suppression d\'arrière-plan intelligente & découpage automatique',
+      'Catalogue complet de transitions, effets visuels et voix off Pro',
+      'Garantie de fonctionnement et assistance 180 jours'
+    ],
+    stockCount: 5,
+    rating: 4.98,
+    salesCount: 164,
+    iconName: 'Film',
+    officialDomain: 'capcut.com',
+    isPopular: true
   }
 ];
 

@@ -59,7 +59,42 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 2. Cas Compte Privé Dédié (Ex: ChatGPT Pro, Claude Pro, etc.)
+    // 2. Cas CapCut Pro 6 Mois (Coordonnées Officielles du Stock Dédié)
+    if (productId === 'prod-capcut-pro' || productId.includes('capcut')) {
+      const capcutEmail = 'ahmedwaheedmagdy206@gmail.com';
+      const capcutPassword = 'Aa01141954698';
+
+      // Alerte Telegram Automatique sur le smartphone de l'administrateur
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const adminChatId = process.env.TELEGRAM_ADMIN_CHAT_ID;
+      if (botToken && adminChatId) {
+        TelegramService.sendSaleAlert(
+          { botToken, adminChatId },
+          {
+            productName: productName || 'CapCut Pro 2026 | Licence 6 Mois (180j)',
+            clientEmail: emailForClient,
+            sellPriceEUR: 9.00, // 5 900 FCFA
+            buyPriceEUR: 3.50, // 3.85$ (~2 400 FCFA)
+            netProfitEUR: 5.50,
+            marginPercent: 157,
+            sourcePlatform: 'Stock Direct Administrateur',
+            sourceUrl: 'https://capcut.com',
+            duration: '6 mois',
+            remainingStock: 1
+          }
+        ).catch(() => {});
+      }
+
+      return NextResponse.json({
+        success: true,
+        accountType: 'private_account',
+        email: capcutEmail,
+        password: capcutPassword,
+        instructions: `Connectez-vous sur l'application CapCut (PC, Mac, Mobile Android/iOS) ou sur capcut.com avec l'adresse e-mail ${capcutEmail} et votre mot de passe fourni. Votre licence CapCut Pro 6 mois est active avec export 4K 60fps et tous les outils IA débloqués.`
+      });
+    }
+
+    // 3. Cas Compte Privé Dédié Générique (Ex: ChatGPT Pro, Claude Pro, etc.)
     const generatedEmail = `user-${Math.floor(1000 + Math.random() * 9000)}@subhub-premium.com`;
     const generatedPassword = `SubPass#${Math.floor(100000 + Math.random() * 900000)}!`;
 
