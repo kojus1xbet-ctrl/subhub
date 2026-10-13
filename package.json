@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@google/genai": "^2.27.0",
+    "@types/nodemailer": "^8.0.2",
     "cheerio": "^1.1.0",
     "clsx": "^2.1.1",
     "lucide-react": "^1.52.0",
     "next": "16.3.8",
+    "nodemailer": "^10.1.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "tailwind-merge": "^3.7.0"

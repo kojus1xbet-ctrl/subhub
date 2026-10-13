@@ -11,7 +11,10 @@ import {
   KeyRound,
   Loader2,
   AlertCircle,
-  User
+  User,
+  UserPlus,
+  Sparkles,
+  ExternalLink
 } from 'lucide-react';
 import { ClientUser, getGoogleClientId } from '@/lib/client-auth';
 
@@ -37,12 +40,19 @@ export function ClientAuthModal({
   inline = false
 }: ClientAuthModalProps) {
   const [step, setStep] = useState<'options' | 'google_form' | 'otp_sent' | 'success'>('options');
+  // Bascule entre Connexion ('login') et Création de compte ('register')
+  const [flowMode, setFlowMode] = useState<'login' | 'register'>('login');
   const [authMode, setAuthMode] = useState<'password' | 'otp'>('password');
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [otpCode, setOtpCode] = useState('');
+  const [otpToken, setOtpToken] = useState<string | null>(null);
   const [receivedCode, setReceivedCode] = useState<string | null>(null);
+  const [magicLinkPath, setMagicLinkPath] = useState<string | null>(null);
+  const [emailWasSent, setEmailWasSent] = useState<boolean>(false);
+
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,7 +120,7 @@ export function ClientAuthModal({
           size: 'large',
           type: 'standard',
           shape: 'rectangular',
-          text: 'continue_with',
+          text: flowMode === 'register' ? 'signup_with' : 'continue_with',
           logo_alignment: 'left',
           width: 360
         });
@@ -130,7 +140,7 @@ export function ClientAuthModal({
       }, 300);
       return () => clearInterval(interval);
     }
-  }, [isOpen, inline, step]);
+  }, [isOpen, inline, step, flowMode]);
 
   if (!isOpen && !inline) return null;
 
@@ -142,7 +152,6 @@ export function ClientAuthModal({
     if (clientId && window.google?.accounts?.oauth2) {
       setGoogleLoading(true);
 
-      // Sécurité anti-rotation infinie (8 secondes max)
       const safetyTimer = setTimeout(() => {
         setGoogleLoading(false);
       }, 8000);
@@ -167,7 +176,6 @@ export function ClientAuthModal({
               return;
             }
             try {
-              // Récupération directe du profil Google depuis le navigateur
               let googleUser = null;
               try {
                 const uRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
@@ -211,7 +219,7 @@ export function ClientAuthModal({
     }
   };
 
-  // Validation par Compte Gmail / Email + Mot de passe personnel chiffré
+  // Connexion par Compte Email + Mot de passe
   const handlePasswordSubmit = async (e: React.FormEvent, forceGmail = false) => {
     e.preventDefault();
     const trimmedEmail = email.trim().toLowerCase();
@@ -227,7 +235,7 @@ export function ClientAuthModal({
     }
 
     if (!password || password.length < 4) {
-      setError('Veuillez définir ou saisir votre mot de passe personnel (min. 4 caractères).');
+      setError('Veuillez saisir votre mot de passe personnel (min. 4 caractères).');
       return;
     }
 
@@ -257,7 +265,56 @@ export function ClientAuthModal({
     }
   };
 
-  // Demande de code OTP à 6 chiffres
+  // Inscription d'un nouveau compte avec envoi du code & lien de validation par e-mail
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!name.trim()) {
+      setError('Veuillez indiquer votre prénom ou pseudo.');
+      return;
+    }
+    if (!trimmedEmail || !trimmedEmail.includes('@')) {
+      setError('Veuillez renseigner une adresse e-mail valide.');
+      return;
+    }
+    if (!password || password.length < 4) {
+      setError('Veuillez choisir un mot de passe d\'au moins 4 caractères.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/auth/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register_send_code',
+          email: trimmedEmail,
+          name: name.trim(),
+          password,
+          isSignup: true
+        })
+      });
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Impossible d\'envoyer le code de validation');
+      }
+
+      setOtpToken(data.otpToken || null);
+      setReceivedCode(data.code || null);
+      setMagicLinkPath(data.magicLink || null);
+      setEmailWasSent(Boolean(data.emailSent));
+      setStep('otp_sent');
+    } catch (err: any) {
+      setError(err?.message || 'Erreur lors de la création du compte');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Demande de code OTP à 6 chiffres + lien magique par e-mail
   const handleSendEmailCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !email.includes('@')) {
@@ -273,7 +330,10 @@ export function ClientAuthModal({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           action: 'send_code',
-          email: email.trim()
+          email: email.trim(),
+          name: name.trim() || undefined,
+          password: password || undefined,
+          isSignup: flowMode === 'register'
         })
       });
       const data = await res.json();
@@ -281,7 +341,10 @@ export function ClientAuthModal({
         throw new Error(data.error || 'Impossible d\'envoyer le code');
       }
 
-      setReceivedCode(data.code);
+      setOtpToken(data.otpToken || null);
+      setReceivedCode(data.code || null);
+      setMagicLinkPath(data.magicLink || null);
+      setEmailWasSent(Boolean(data.emailSent));
       setStep('otp_sent');
     } catch (err: any) {
       setError(err?.message || 'Erreur de communication avec le serveur');
@@ -307,7 +370,9 @@ export function ClientAuthModal({
         body: JSON.stringify({
           action: 'verify_code',
           email: email.trim(),
-          code: otpCode.trim()
+          name: name.trim() || undefined,
+          code: otpCode.trim(),
+          otpToken
         })
       });
       const data = await res.json();
@@ -345,7 +410,9 @@ export function ClientAuthModal({
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-4">
             <CheckCircle2 className="h-8 w-8 animate-bounce" />
           </div>
-          <h3 className="text-xl font-bold text-white">Authentification Validée !</h3>
+          <h3 className="text-xl font-bold text-white">
+            {flowMode === 'register' ? 'Inscription Validée !' : 'Authentification Validée !'}
+          </h3>
           <p className="mt-2 text-sm text-slate-400">
             Ouverture sécurisée de votre Espace Client...
           </p>
@@ -430,9 +497,6 @@ export function ClientAuthModal({
                   className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 />
               </div>
-              <p className="mt-1 text-[10px] text-slate-400">
-                Lors de votre 1ère connexion, ce code verrouillera votre compte personnel.
-              </p>
             </div>
 
             <button
@@ -464,18 +528,28 @@ export function ClientAuthModal({
         </div>
       )}
 
-      {/* Étape 1 : Choix Google ou Connexion Email */}
+      {/* Étape 1 : Connexion ou Création de Compte */}
       {step === 'options' && (
         <div>
           <div className="text-center mb-6">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mb-3">
-              <Lock className="h-6 w-6" />
+            <div className={`mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border mb-3 ${
+              flowMode === 'register'
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                : 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20'
+            }`}>
+              {flowMode === 'register' ? (
+                <UserPlus className="h-6 w-6" />
+              ) : (
+                <Lock className="h-6 w-6" />
+              )}
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white">
-              Connexion Espace Client
+              {flowMode === 'register' ? 'Créer un Compte Client' : 'Connexion Espace Client'}
             </h2>
             <p className="mt-1 text-xs sm:text-sm text-slate-400">
-              Authentification requise pour accéder à vos abonnements, codes PIN et portefeuille.
+              {flowMode === 'register'
+                ? 'Inscrivez-vous gratuitement pour recevoir vos accès instantanés et gérer vos abonnements.'
+                : 'Authentification requise pour accéder à vos abonnements, codes PIN et portefeuille.'}
             </p>
           </div>
 
@@ -486,7 +560,7 @@ export function ClientAuthModal({
             </div>
           )}
 
-          {/* Bouton Officiel Natif Google Sign-In (non blocable par les bloqueurs de popups) */}
+          {/* Bouton Officiel Natif Google Sign-In */}
           <div className="flex flex-col items-center gap-2">
             <div ref={googleBtnContainerRef} className="w-full flex justify-center min-h-[44px]" />
 
@@ -507,7 +581,9 @@ export function ClientAuthModal({
                     <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
                   </svg>
                 )}
-                <span>Continuer avec Google</span>
+                <span>
+                  {flowMode === 'register' ? "S'inscrire avec Google" : 'Continuer avec Google'}
+                </span>
               </button>
             )}
           </div>
@@ -518,38 +594,30 @@ export function ClientAuthModal({
               <div className="w-full border-t border-slate-800" />
             </div>
             <span className="relative bg-slate-900 px-3 text-[11px] uppercase tracking-wider text-slate-500 font-semibold">
-              ou avec votre e-mail
+              {flowMode === 'register' ? 'ou créer un compte par e-mail' : 'ou avec votre e-mail'}
             </span>
           </div>
 
-          {/* Onglets Mot de passe vs Code temporaire */}
-          <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-950 p-1 border border-slate-800 mb-4">
-            <button
-              type="button"
-              onClick={() => { setAuthMode('password'); setError(null); }}
-              className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
-                authMode === 'password'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Mot de passe
-            </button>
-            <button
-              type="button"
-              onClick={() => { setAuthMode('otp'); setError(null); }}
-              className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
-                authMode === 'otp'
-                  ? 'bg-indigo-600 text-white shadow'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              Code à 6 chiffres
-            </button>
-          </div>
+          {/* MODE INSCRIPTION (Création d'un nouveau compte avec validation par e-mail) */}
+          {flowMode === 'register' ? (
+            <form onSubmit={handleRegisterSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">
+                  Votre prénom ou pseudo
+                </label>
+                <div className="relative">
+                  <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Alex"
+                    className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
 
-          {authMode === 'password' ? (
-            <form onSubmit={(e) => handlePasswordSubmit(e, false)} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
                   Votre adresse e-mail
@@ -562,14 +630,14 @@ export function ClientAuthModal({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="ex: client@gmail.com"
-                    className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-medium text-slate-300 mb-1">
-                  Mot de passe personnel
+                  Choisissez un mot de passe
                 </label>
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -579,71 +647,187 @@ export function ClientAuthModal({
                     minLength={4}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    placeholder="Minimum 4 caractères"
+                    className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none focus:ring-1 focus:ring-emerald-500"
                   />
                 </div>
               </div>
 
               <button
                 type="submit"
-                disabled={loading || !email.trim() || password.length < 4}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-violet-500 transition-all disabled:opacity-50"
+                disabled={loading || !name.trim() || !email.trim() || password.length < 4}
+                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/25 hover:from-emerald-500 hover:to-teal-500 transition-all disabled:opacity-50"
               >
                 {loading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <>
-                    <span>Se connecter à mon espace</span>
-                    <ArrowRight className="h-4 w-4" />
+                    <Sparkles className="h-4 w-4" />
+                    <span>Créer mon compte & Recevoir mon code</span>
                   </>
                 )}
               </button>
             </form>
           ) : (
-            <form onSubmit={handleSendEmailCode} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-300 mb-1.5">
-                  Votre adresse e-mail personnelle
-                </label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                  <input
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="ex: client@gmail.com"
-                    className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
-                </div>
+            /* MODE CONNEXION */
+            <>
+              {/* Onglets Mot de passe vs Code de connexion par e-mail */}
+              <div className="grid grid-cols-2 gap-1.5 rounded-xl bg-slate-950 p-1 border border-slate-800 mb-4">
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('password'); setError(null); }}
+                  className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
+                    authMode === 'password'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Mot de passe
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setAuthMode('otp'); setError(null); }}
+                  className={`rounded-lg py-1.5 text-xs font-bold transition-all ${
+                    authMode === 'otp'
+                      ? 'bg-indigo-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Code / Lien par mail
+                </button>
               </div>
 
-              <button
-                type="submit"
-                disabled={loading || !email.trim()}
-                className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-violet-500 transition-all disabled:opacity-50"
-              >
-                {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <>
-                    <span>Recevoir le code à 6 chiffres</span>
-                    <ArrowRight className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </form>
+              {authMode === 'password' ? (
+                <form onSubmit={(e) => handlePasswordSubmit(e, false)} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Votre adresse e-mail
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="ex: client@gmail.com"
+                        className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      Mot de passe personnel
+                    </label>
+                    <div className="relative">
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="password"
+                        required
+                        minLength={4}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || !email.trim() || password.length < 4}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-violet-500 transition-all disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>Se connecter à mon espace</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              ) : (
+                <form onSubmit={handleSendEmailCode} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                      Votre adresse e-mail personnelle
+                    </label>
+                    <div className="relative">
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                      <input
+                        type="email"
+                        required
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="ex: client@gmail.com"
+                        className="w-full rounded-xl border border-slate-750 bg-slate-950/70 py-2.5 pl-10 pr-4 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={loading || !email.trim()}
+                    className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 via-violet-600 to-indigo-600 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-600/25 hover:from-indigo-500 hover:to-violet-500 transition-all disabled:opacity-50"
+                  >
+                    {loading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <span>Recevoir mon code & lien par e-mail</span>
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </button>
+                </form>
+              )}
+            </>
           )}
 
-          <div className="mt-5 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
+          {/* Suggestion d'inscription / bascule Connexion <-> Création de compte en bas de page */}
+          <div className="mt-5 pt-4 border-t border-slate-800/80 text-center">
+            {flowMode === 'login' ? (
+              <p className="text-xs sm:text-sm text-slate-400">
+                Vous n&apos;avez pas encore de compte ?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setFlowMode('register');
+                  }}
+                  className="font-bold text-indigo-400 hover:text-indigo-300 underline underline-offset-4 transition-colors"
+                >
+                  Créer un compte gratuitement
+                </button>
+              </p>
+            ) : (
+              <p className="text-xs sm:text-sm text-slate-400">
+                Vous avez déjà un compte SubHub ?{' '}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setError(null);
+                    setFlowMode('login');
+                  }}
+                  className="font-bold text-indigo-400 hover:text-indigo-300 underline underline-offset-4 transition-colors"
+                >
+                  Se connecter à mon espace
+                </button>
+              </p>
+            )}
+          </div>
+
+          <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
             <span>Session chiffrée HMAC-SHA256 & coffre-fort isolé</span>
           </div>
         </div>
       )}
 
-      {/* Étape 2 : Saisie du code reçu */}
+      {/* Étape 2 : Validation du code à 6 chiffres ou du lien d'activation reçu par e-mail */}
       {step === 'otp_sent' && (
         <div>
           <div className="text-center mb-6">
@@ -651,11 +835,20 @@ export function ClientAuthModal({
               <KeyRound className="h-6 w-6" />
             </div>
             <h2 className="text-xl sm:text-2xl font-black text-white">
-              Vérification du code
+              {flowMode === 'register' ? 'Validez votre inscription' : 'Vérification de sécurité'}
             </h2>
-            <p className="mt-1 text-xs text-slate-400">
-              Code de sécurité généré pour : <br />
-              <span className="font-semibold text-slate-200">{email}</span>
+            <p className="mt-1 text-xs text-slate-400 leading-relaxed">
+              {emailWasSent ? (
+                <>
+                  Un e-mail contenant votre <strong>code à 6 chiffres</strong> et votre <strong>lien d&apos;activation</strong> vient d&apos;être envoyé à :<br />
+                  <span className="font-semibold text-emerald-400">{email}</span>
+                </>
+              ) : (
+                <>
+                  Code de validation et lien d&apos;activation générés pour :<br />
+                  <span className="font-semibold text-slate-200">{email}</span>
+                </>
+              )}
             </p>
           </div>
 
@@ -666,26 +859,49 @@ export function ClientAuthModal({
             </div>
           )}
 
+          {emailWasSent && (
+            <div className="mb-5 rounded-xl border border-emerald-500/30 bg-emerald-950/30 p-3.5 text-xs text-emerald-200">
+              <p className="font-semibold flex items-center gap-1.5 text-emerald-300 mb-1">
+                <CheckCircle2 className="h-4 w-4 shrink-0" />
+                E-mail envoyé avec succès !
+              </p>
+              <p className="text-slate-300 text-[11px] leading-relaxed">
+                Ouvrez votre boîte mail (vérifiez aussi vos courriers indésirables / spams) puis saisissez le code à 6 chiffres ci-dessous ou cliquez sur le bouton <strong>« Valider mon inscription »</strong> dans l&apos;e-mail.
+              </p>
+            </div>
+          )}
+
           {receivedCode && (
-            <div className="mb-5 rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-3 text-left">
+            <div className="mb-5 rounded-xl border border-indigo-500/30 bg-indigo-950/40 p-3.5 text-left space-y-2.5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-semibold text-indigo-300 uppercase tracking-wider">
-                  Votre code de connexion
+                  Code d&apos;activation généré
                 </span>
                 <button
                   type="button"
                   onClick={() => setOtpCode(receivedCode)}
                   className="text-[11px] font-bold text-cyan-400 hover:underline"
                 >
-                  Copier et remplir
+                  Remplir automatiquement
                 </button>
               </div>
-              <div className="mt-1 text-lg font-black font-mono tracking-widest text-white">
+              <div className="text-xl font-black font-mono tracking-widest text-white">
                 {receivedCode}
               </div>
-              <p className="mt-1 text-[10px] text-slate-400">
-                Valable pendant 15 minutes.
-              </p>
+              {magicLinkPath && (
+                <div className="pt-2 border-t border-indigo-500/20 flex items-center justify-between">
+                  <span className="text-[11px] text-slate-400">
+                    Ou validez via le lien direct :
+                  </span>
+                  <a
+                    href={magicLinkPath}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-400 hover:text-emerald-300 underline"
+                  >
+                    <span>Lien de validation 1-clic</span>
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
@@ -716,7 +932,11 @@ export function ClientAuthModal({
               ) : (
                 <>
                   <CheckCircle2 className="h-4 w-4" />
-                  <span>Valider et déverrouiller mon espace</span>
+                  <span>
+                    {flowMode === 'register'
+                      ? 'Activer mon compte & Ouvrir mon espace'
+                      : 'Valider et déverrouiller mon espace'}
+                  </span>
                 </>
               )}
             </button>
@@ -727,14 +947,14 @@ export function ClientAuthModal({
                 onClick={() => setStep('options')}
                 className="text-xs text-slate-400 hover:text-white"
               >
-                ← Changer d'e-mail
+                ← Modifier mon adresse e-mail
               </button>
               <button
                 type="button"
                 onClick={handleSendEmailCode}
                 className="text-xs text-indigo-400 hover:underline"
               >
-                Renvoyer un code
+                Renvoyer le code par mail
               </button>
             </div>
           </form>
