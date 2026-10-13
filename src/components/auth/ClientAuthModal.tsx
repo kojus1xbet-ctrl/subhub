@@ -1,16 +1,14 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   X, 
   Mail, 
   Lock, 
   ArrowRight, 
   CheckCircle2, 
-  Sparkles, 
   ShieldCheck, 
   KeyRound,
-  ExternalLink,
   Loader2,
   AlertCircle,
   User
@@ -45,102 +43,175 @@ export function ClientAuthModal({
   const [name, setName] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [receivedCode, setReceivedCode] = useState<string | null>(null);
-  const [magicLink, setMagicLink] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [gsiReady, setGsiReady] = useState(false);
+  const [nativeBtnRendered, setNativeBtnRendered] = useState(false);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.google?.accounts?.oauth2) {
-      setGsiReady(true);
-      return;
-    }
+  const googleBtnContainerRef = useRef<HTMLDivElement>(null);
 
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    script.onload = () => setGsiReady(true);
-    document.body.appendChild(script);
-  }, []);
+  const completeLogin = (loggedUser: ClientUser) => {
+    setLoading(false);
+    setGoogleLoading(false);
+    setStep('success');
+    setTimeout(() => {
+      onSuccess(loggedUser);
+      if (onClose) onClose();
+      if (!inline && typeof window !== 'undefined' && redirectUrl) {
+        window.location.href = redirectUrl;
+      }
+    }, 600);
+  };
 
-  if (!isOpen && !inline) return null;
-
-  // 1. Connexion avec Google OAuth 2.0 Officiel
-  const triggerGooglePopup = (clientId: string) => {
-    setLoading(true);
+  // Callback officiel Google Identity Services (ID Token JWT)
+  const handleGoogleCredentialResponse = async (response: any) => {
+    if (!response?.credential) return;
+    setGoogleLoading(true);
+    setError(null);
     try {
-      const tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: 'openid email profile',
-        callback: async (tokenResponse: any) => {
-          if (tokenResponse.error) {
-            setLoading(false);
-            setError('Authentification Google annulée ou refusée.');
-            return;
-          }
-          try {
-            const res = await fetch('/api/auth/client', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                action: 'google_oauth',
-                accessToken: tokenResponse.access_token
-              })
-            });
-            const data = await res.json();
-            if (!data.success) {
-              throw new Error(data.error || 'Échec de validation Google');
-            }
-
-            completeLogin(data.user);
-          } catch (err: any) {
-            setError(err?.message || 'Erreur lors de la validation Google');
-          } finally {
-            setLoading(false);
-          }
-        }
+      const res = await fetch('/api/auth/client', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'google_oauth',
+          idToken: response.credential
+        })
       });
-
-      tokenClient.requestAccessToken({ prompt: 'select_account' });
-    } catch (e: any) {
-      setLoading(false);
-      setStep('google_form');
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || 'Échec de validation Google');
+      }
+      completeLogin(data.user);
+    } catch (err: any) {
+      setGoogleLoading(false);
+      setError(err?.message || 'Erreur lors de la connexion Google');
     }
   };
 
+  // Initialisation du bouton natif Google Sign-In dès que le modal est visible
+  useEffect(() => {
+    if ((!isOpen && !inline) || step !== 'options') return;
+    if (typeof window === 'undefined') return;
+
+    const clientId = getGoogleClientId();
+    if (!clientId) return;
+
+    const initGoogleButton = () => {
+      if (!window.google?.accounts?.id || !googleBtnContainerRef.current) return false;
+      try {
+        window.google.accounts.id.initialize({
+          client_id: clientId,
+          callback: handleGoogleCredentialResponse,
+          auto_select: false,
+          cancel_on_tap_outside: true
+        });
+        window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
+          theme: 'outline',
+          size: 'large',
+          type: 'standard',
+          shape: 'rectangular',
+          text: 'continue_with',
+          logo_alignment: 'left',
+          width: 360
+        });
+        setNativeBtnRendered(true);
+        return true;
+      } catch (e) {
+        console.warn('Erreur renderButton Google:', e);
+        return false;
+      }
+    };
+
+    if (!initGoogleButton()) {
+      const interval = setInterval(() => {
+        if (initGoogleButton()) {
+          clearInterval(interval);
+        }
+      }, 300);
+      return () => clearInterval(interval);
+    }
+  }, [isOpen, inline, step]);
+
+  if (!isOpen && !inline) return null;
+
+  // Bouton secours OAuth 2.0 Popup (avec error_callback et timeout anti-blocage)
   const handleGoogleSignInClick = () => {
     setError(null);
     const clientId = getGoogleClientId();
 
     if (clientId && window.google?.accounts?.oauth2) {
-      triggerGooglePopup(clientId);
-    } else if (clientId) {
-      setLoading(true);
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.onload = () => {
-        setGsiReady(true);
-        if (window.google?.accounts?.oauth2) {
-          triggerGooglePopup(clientId);
-        } else {
-          setLoading(false);
-          setStep('google_form');
-        }
-      };
-      script.onerror = () => {
-        setLoading(false);
+      setGoogleLoading(true);
+
+      // Sécurité anti-rotation infinie (8 secondes max)
+      const safetyTimer = setTimeout(() => {
+        setGoogleLoading(false);
+      }, 8000);
+
+      try {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: clientId,
+          scope: 'openid email profile',
+          error_callback: (err: any) => {
+            clearTimeout(safetyTimer);
+            setGoogleLoading(false);
+            if (err?.type === 'popup_closed') {
+              return;
+            }
+            setStep('google_form');
+          },
+          callback: async (tokenResponse: any) => {
+            clearTimeout(safetyTimer);
+            if (tokenResponse.error) {
+              setGoogleLoading(false);
+              setError('Authentification Google annulée ou refusée.');
+              return;
+            }
+            try {
+              // Récupération directe du profil Google depuis le navigateur
+              let googleUser = null;
+              try {
+                const uRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                });
+                if (uRes.ok) {
+                  googleUser = await uRes.json();
+                }
+              } catch {}
+
+              const res = await fetch('/api/auth/client', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  action: 'google_oauth',
+                  accessToken: tokenResponse.access_token,
+                  googleUser
+                })
+              });
+              const data = await res.json();
+              if (!data.success) {
+                throw new Error(data.error || 'Échec de validation Google');
+              }
+
+              completeLogin(data.user);
+            } catch (err: any) {
+              setGoogleLoading(false);
+              setError(err?.message || 'Erreur lors de la validation Google');
+            }
+          }
+        });
+
+        tokenClient.requestAccessToken({ prompt: 'select_account' });
+      } catch {
+        clearTimeout(safetyTimer);
+        setGoogleLoading(false);
         setStep('google_form');
-      };
-      document.body.appendChild(script);
+      }
     } else {
       setStep('google_form');
     }
   };
 
-  // 2. Validation par Compte Gmail / Email + Mot de passe personnel chiffré
+  // Validation par Compte Gmail / Email + Mot de passe personnel chiffré
   const handlePasswordSubmit = async (e: React.FormEvent, forceGmail = false) => {
     e.preventDefault();
     const trimmedEmail = email.trim().toLowerCase();
@@ -186,7 +257,7 @@ export function ClientAuthModal({
     }
   };
 
-  // 3. Demande de code OTP à 6 chiffres
+  // Demande de code OTP à 6 chiffres
   const handleSendEmailCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !email.includes('@')) {
@@ -211,7 +282,6 @@ export function ClientAuthModal({
       }
 
       setReceivedCode(data.code);
-      setMagicLink(data.magicLink);
       setStep('otp_sent');
     } catch (err: any) {
       setError(err?.message || 'Erreur de communication avec le serveur');
@@ -220,7 +290,7 @@ export function ClientAuthModal({
     }
   };
 
-  // 4. Vérification du code OTP à 6 chiffres
+  // Vérification du code OTP à 6 chiffres
   const handleVerifyCode = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!otpCode || otpCode.length < 6) {
@@ -251,17 +321,6 @@ export function ClientAuthModal({
     } finally {
       setLoading(false);
     }
-  };
-
-  const completeLogin = (loggedUser: ClientUser) => {
-    setStep('success');
-    setTimeout(() => {
-      onSuccess(loggedUser);
-      if (onClose) onClose();
-      if (!inline && typeof window !== 'undefined' && redirectUrl) {
-        window.location.href = redirectUrl;
-      }
-    }, 800);
   };
 
   const cardContent = (
@@ -427,25 +486,31 @@ export function ClientAuthModal({
             </div>
           )}
 
-          {/* Bouton Continuer avec Google */}
-          <button
-            type="button"
-            onClick={handleGoogleSignInClick}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-lg hover:bg-slate-100 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
-          >
-            {loading ? (
-              <Loader2 className="h-5 w-5 animate-spin text-slate-800" />
-            ) : (
-              <svg viewBox="0 0 24 24" className="h-5 w-5">
-                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
-                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
-                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
-              </svg>
+          {/* Bouton Officiel Natif Google Sign-In (non blocable par les bloqueurs de popups) */}
+          <div className="flex flex-col items-center gap-2">
+            <div ref={googleBtnContainerRef} className="w-full flex justify-center min-h-[44px]" />
+
+            {!nativeBtnRendered && (
+              <button
+                type="button"
+                onClick={handleGoogleSignInClick}
+                disabled={googleLoading}
+                className="w-full flex items-center justify-center gap-3 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-900 shadow-lg hover:bg-slate-100 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+              >
+                {googleLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-slate-800" />
+                ) : (
+                  <svg viewBox="0 0 24 24" className="h-5 w-5">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                )}
+                <span>Continuer avec Google</span>
+              </button>
             )}
-            <span>Continuer avec Google</span>
-          </button>
+          </div>
 
           {/* Séparateur */}
           <div className="relative my-5 text-center">

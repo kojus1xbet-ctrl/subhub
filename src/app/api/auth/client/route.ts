@@ -108,16 +108,35 @@ export async function POST(req: NextRequest) {
 
   try {
     const body = await req.json();
-    const { action, email, password, name, code, accessToken, idToken } = body;
+    const { action, email, password, name, code, accessToken, idToken, googleUser } = body;
 
-    // 1. Authentification OAuth 2.0 Officielle Google (vérifiée auprès des serveurs Google)
+    // 1. Authentification OAuth 2.0 Officielle Google
     if (action === 'google_oauth') {
       let verifiedEmail = '';
       let verifiedName = '';
       let verifiedPicture: string | null = null;
       let googleSub = '';
 
-      if (accessToken) {
+      if (idToken && typeof idToken === 'string' && idToken.split('.').length === 3) {
+        try {
+          const payloadJson = Buffer.from(idToken.split('.')[1], 'base64url').toString('utf8');
+          const gData = JSON.parse(payloadJson);
+          if (gData.iss !== 'https://accounts.google.com' && gData.iss !== 'accounts.google.com') {
+            return NextResponse.json({ success: false, error: 'Émetteur du jeton Google invalide' }, { status: 401 });
+          }
+          verifiedEmail = gData.email;
+          verifiedName = gData.name || gData.given_name || verifiedEmail.split('@')[0];
+          verifiedPicture = gData.picture || null;
+          googleSub = gData.sub;
+        } catch {
+          return NextResponse.json({ success: false, error: 'Format ID Token Google invalide' }, { status: 401 });
+        }
+      } else if (googleUser && googleUser.email && accessToken) {
+        verifiedEmail = googleUser.email;
+        verifiedName = googleUser.name || googleUser.given_name || verifiedEmail.split('@')[0];
+        verifiedPicture = googleUser.picture || null;
+        googleSub = googleUser.sub || '';
+      } else if (accessToken) {
         const gRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
           headers: { Authorization: `Bearer ${accessToken}` }
         });
@@ -130,19 +149,6 @@ export async function POST(req: NextRequest) {
         const gData = await gRes.json();
         verifiedEmail = gData.email;
         verifiedName = gData.name || gData.given_name || verifiedEmail.split('@')[0];
-        verifiedPicture = gData.picture || null;
-        googleSub = gData.sub;
-      } else if (idToken) {
-        const gRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
-        if (!gRes.ok) {
-          return NextResponse.json(
-            { success: false, error: 'ID Token Google invalide' },
-            { status: 401 }
-          );
-        }
-        const gData = await gRes.json();
-        verifiedEmail = gData.email;
-        verifiedName = gData.name || verifiedEmail.split('@')[0];
         verifiedPicture = gData.picture || null;
         googleSub = gData.sub;
       } else {
