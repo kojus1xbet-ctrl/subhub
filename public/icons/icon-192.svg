@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="192" height="192">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" />
+      <stop offset="100%" stop-color="#020617" />
+    </linearGradient>
+    <linearGradient id="primaryGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4f46e5" />
+      <stop offset="50%" stop-color="#6366f1" />
+      <stop offset="100%" stop-color="#06b6d4" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect width="504" height="504" x="4" y="4" rx="108" fill="none" stroke="#1e293b" stroke-width="6" />
+
+  <!-- Outer Glow Circle -->
+  <circle cx="256" cy="230" r="160" fill="url(#primaryGrad)" opacity="0.15" filter="url(#glow)" />
+
+  <!-- Shield / Emblem Container -->
+  <rect x="106" y="80" width="300" height="300" rx="64" fill="#0f172a" stroke="url(#primaryGrad)" stroke-width="8" filter="url(#glow)" />
+
+  <!-- Icon "S" Stylized Logo -->
+  <path d="M 310 160 C 310 135 285 125 256 125 C 215 125 185 145 185 185 C 185 240 325 220 325 295 C 325 345 285 365 256 365 C 210 365 180 340 180 305" 
+        fill="none" 
+        stroke="url(#primaryGrad)" 
+        stroke-width="36" 
+        stroke-linecap="round" 
+        stroke-linejoin="round" />
+
+  <!-- Sparkle Accent -->
+  <path d="M 345 130 Q 360 145 375 145 Q 360 145 345 160 Q 360 145 345 130 Z" fill="#06b6d4" />
+
+  <!-- Brand Name Typography -->
+  <text x="256" y="445" 
+        text-anchor="middle" 
+        font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" 
+        font-size="44" 
+        font-weight="900" 
+        letter-spacing="4" 
+        fill="#f8fafc">
+    SUB<tspan fill="#06b6d4">HUB</tspan>
+  </text>
+</svg>
